@@ -1035,79 +1035,180 @@ function Browser({
       {selectedAsset && (
         <aside className="details-panel">
           <div className="details-header">
-            <h3>Asset Details</h3>
-            <button className="icon-button" onClick={() => setSelectedAsset(null)}>
+            <div className="details-header-title">
+              <span>Selected Asset</span>
+              <h3>Asset Details</h3>
+            </div>
+            <button
+              className="icon-button"
+              onClick={() => setSelectedAsset(null)}
+              title="Close details"
+              aria-label="Close asset details"
+            >
               <X size={18} />
             </button>
           </div>
-          <div className="details-icon">{getFileIcon(selectedAsset.file_type)}</div>
-          <h4>{selectedAsset.name}</h4>
-          <dl>
-            <dt>ID</dt>
-            <dd>{selectedAsset.id}</dd>
-            <dt>Source</dt>
-            <dd>{selectedAsset.source}</dd>
-            <dt>Type</dt>
-            <dd>{selectedAsset.file_type}</dd>
-            <dt>MIME</dt>
-            <dd>{selectedAsset.mime_type || "-"}</dd>
-            <dt>Extension</dt>
-            <dd>{selectedAsset.extension || "-"}</dd>
-            <dt>Size</dt>
-            <dd>{formatBytes(selectedAsset.size_bytes)}</dd>
-            <dt>Modified</dt>
-            <dd>{formatDate(selectedAsset.modified_at)}</dd>
-            <dt>Created</dt>
-            <dd>{formatDate(selectedAsset.created_at)}</dd>
-            <dt>Path</dt>
-            <dd className="details-path">{selectedAsset.path}</dd>
-          </dl>
-          {isPreviewable(selectedAsset) && (
-            <button className="primary-button" onClick={() => setPreviewAsset(selectedAsset)}>
-              <Eye size={16} /> Open Preview
-            </button>
-          )}
-          {selectedAsset.file_type === "image" && (
-            <div className="details-analysis-actions">
+
+          <div className="details-identity">
+            <div className="details-icon">{getFileIcon(selectedAsset.file_type, 30)}</div>
+            <div className="details-identity-text">
+              <h4 title={selectedAsset.name}>{selectedAsset.name}</h4>
+              <span>
+                {selectedAsset.extension
+                  ? selectedAsset.extension.toUpperCase().replace(/^\./, "")
+                  : selectedAsset.file_type}
+                {" · "}
+                {formatBytes(selectedAsset.size_bytes)}
+              </span>
+            </div>
+          </div>
+
+          <div className="details-status-row">
+            <span className={selectedAsset.is_missing ? "asset-status missing" : "asset-status available"}>
+              <span className="asset-status-dot" />
+              {selectedAsset.is_missing ? "Missing from disk" : "Available"}
+            </span>
+            <span className="asset-source-badge">{selectedAsset.source}</span>
+          </div>
+
+          <section className="details-section">
+            <div className="details-section-heading">
+              <strong>File Information</strong>
+            </div>
+            <dl className="details-list">
+              <div className="detail-row">
+                <dt>ID</dt>
+                <dd>{selectedAsset.id}</dd>
+              </div>
+              <div className="detail-row">
+                <dt>File Type</dt>
+                <dd className="capitalize-value">{selectedAsset.file_type}</dd>
+              </div>
+              <div className="detail-row">
+                <dt>Extension</dt>
+                <dd>{selectedAsset.extension || "-"}</dd>
+              </div>
+              <div className="detail-row">
+                <dt>MIME Type</dt>
+                <dd>{selectedAsset.mime_type || "-"}</dd>
+              </div>
+              <div className="detail-row">
+                <dt>Size</dt>
+                <dd>{formatBytes(selectedAsset.size_bytes)}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section className="details-section">
+            <div className="details-section-heading">
+              <strong>Dates</strong>
+            </div>
+            <dl className="details-list">
+              <div className="detail-row">
+                <dt>Created</dt>
+                <dd>{formatDate(selectedAsset.created_at)}</dd>
+              </div>
+              <div className="detail-row">
+                <dt>Modified</dt>
+                <dd>{formatDate(selectedAsset.modified_at)}</dd>
+              </div>
+              <div className="detail-row">
+                <dt>Accessed</dt>
+                <dd>{formatDate(selectedAsset.accessed_at)}</dd>
+              </div>
+              <div className="detail-row">
+                <dt>Last Scanned</dt>
+                <dd>{formatDate(selectedAsset.last_scanned_at)}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section className="details-section">
+            <div className="details-section-heading">
+              <strong>Location</strong>
+            </div>
+            <div className="details-path-card">
+              <code title={selectedAsset.path}>{selectedAsset.path}</code>
               <button
-                className="primary-button"
-                disabled={aiAnalyzingId === selectedAsset.id}
-                onClick={() => void analyzeImage(selectedAsset.id)}
+                className="secondary-button compact"
+                type="button"
+                onClick={() => {
+                  void navigator.clipboard?.writeText(selectedAsset.path);
+                }}
+                title="Copy full path"
               >
-                <Sparkles size={16} />
-                {aiAnalyzingId === selectedAsset.id ? "Analyzing image..." : "Analyze with AI"}
-              </button>
-              <button
-                className="secondary-button"
-                disabled={faceAnalyzingId === selectedAsset.id}
-                onClick={() => void analyzeFaces(selectedAsset.id)}
-              >
-                <Users size={16} />
-                {faceAnalyzingId === selectedAsset.id ? "Analyzing faces..." : "Analyze Faces"}
+                <Copy size={14} /> Copy Path
               </button>
             </div>
-          )}
+          </section>
+
+          <div className="details-actions">
+            {isPreviewable(selectedAsset) && (
+              <button
+                className="primary-button details-action-button"
+                onClick={() => setPreviewAsset(selectedAsset)}
+                disabled={selectedAsset.is_missing}
+              >
+                <Eye size={16} /> Open Preview
+              </button>
+            )}
+
+            {selectedAsset.file_type === "image" && !selectedAsset.is_missing && (
+              <div className="details-analysis-actions">
+                <button
+                  className="primary-button"
+                  disabled={aiAnalyzingId === selectedAsset.id}
+                  onClick={() => void analyzeImage(selectedAsset.id)}
+                >
+                  <Sparkles size={16} />
+                  {aiAnalyzingId === selectedAsset.id ? "Analyzing image..." : "Analyze with AI"}
+                </button>
+                <button
+                  className="secondary-button"
+                  disabled={faceAnalyzingId === selectedAsset.id}
+                  onClick={() => void analyzeFaces(selectedAsset.id)}
+                >
+                  <Users size={16} />
+                  {faceAnalyzingId === selectedAsset.id ? "Analyzing faces..." : "Analyze Faces"}
+                </button>
+              </div>
+            )}
+          </div>
+
           {assetAiAnalyses[selectedAsset.id] && (
             <section className="asset-analysis-result">
-              <h4>AI Analysis</h4>
+              <div className="analysis-result-heading">
+                <Sparkles size={16} />
+                <h4>AI Analysis</h4>
+              </div>
               <p>{assetAiAnalyses[selectedAsset.id].caption || "No caption returned."}</p>
               <span>Category: {assetAiAnalyses[selectedAsset.id].category || "other"}</span>
               <div className="ai-tags">
-                {assetAiAnalyses[selectedAsset.id].tags.map((tag: string) => <small key={tag}>{tag}</small>)}
+                {assetAiAnalyses[selectedAsset.id].tags.map((tag: string) => (
+                  <small key={tag}>{tag}</small>
+                ))}
               </div>
             </section>
           )}
+
           {faceResults[selectedAsset.id] && (
             <section className="asset-analysis-result">
-              <h4>Face Analysis</h4>
+              <div className="analysis-result-heading">
+                <Users size={16} />
+                <h4>Face Analysis</h4>
+              </div>
               <p>
                 {faceResults[selectedAsset.id].faces_detected
                   ? `${faceResults[selectedAsset.id].faces_detected} face(s) detected.`
                   : "No faces detected."}
               </p>
-              {faceResults[selectedAsset.id].faces.map((face: { face_index: number; confidence: number }) => (
-                <span key={face.face_index}>Face {face.face_index + 1}: {Math.round(face.confidence * 100)}% confidence</span>
-              ))}
+              {faceResults[selectedAsset.id].faces.map(
+                (face: { face_index: number; confidence: number }) => (
+                  <span key={face.face_index}>
+                    Face {face.face_index + 1}: {Math.round(face.confidence * 100)}% confidence
+                  </span>
+                )
+              )}
             </section>
           )}
         </aside>
