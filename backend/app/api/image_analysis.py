@@ -22,6 +22,11 @@ def analyze_image(asset_id: int, db: Session = Depends(get_db)):
     asset = db.get(Asset, asset_id)
     if asset is None:
         raise HTTPException(status_code=404, detail="Asset not found.")
+    if asset.source != "local_pc":
+        raise HTTPException(
+            status_code=400,
+            detail="AI image analysis is currently available only for local PC assets.",
+        )
     if asset.file_type != "image":
         raise HTTPException(status_code=400, detail="AI image analysis is only available for image assets.")
     if asset.is_missing:

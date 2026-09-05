@@ -28,6 +28,7 @@ def analyze_asset_faces(db: Session, asset: Asset) -> dict:
     faces = get_face_engine().detect_faces(path)
     db.execute(delete(FaceEmbedding).where(FaceEmbedding.asset_id == asset.id))
 
+    face_details = []
     for index, face in enumerate(faces):
         db.add(FaceEmbedding(
             asset_id=asset.id,
@@ -37,9 +38,19 @@ def analyze_asset_faces(db: Session, asset: Asset) -> dict:
             detection_confidence=face["confidence"],
             created_at=datetime.now(timezone.utc),
         ))
+        face_details.append({
+            "face_index": index,
+            "confidence": face["confidence"],
+            "bbox": face["bbox"],
+        })
 
     db.commit()
-    return {"asset_id": asset.id, "faces_detected": len(faces), "status": "analyzed"}
+    return {
+        "asset_id": asset.id,
+        "faces_detected": len(faces),
+        "faces": face_details,
+        "status": "analyzed",
+    }
 
 
 def analyze_all_faces(db: Session) -> dict:
