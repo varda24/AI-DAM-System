@@ -98,6 +98,11 @@ function App() {
   const [faceResults, setFaceResults] = useState<Record<number, FaceAnalysisResult>>({});
 
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [currentFolder, setCurrentFolder] = useState<string | null>(null);
+  const [folders, setFolders] = useState<
+    { path: string; name: string; source: string }[]
+  >([]);
+  const [folderLoading, setFolderLoading] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
 
@@ -136,7 +141,13 @@ function App() {
 
   useEffect(() => {
     if (mainView === "browser") void fetchAssets();
-  }, [mainView, page, pageSize, search, fileType, sortBy, sortOrder, includeMissing]);
+  }, [mainView, page, pageSize, search, fileType, sortBy, sortOrder, includeMissing, currentFolder]);
+
+  useEffect(() => {
+    if (mainView !== "browser") return;
+
+    void fetchFolders(currentFolder);
+  }, [mainView, currentFolder, includeMissing]);
 
   useEffect(() => {
     if (mainView === "duplicates") void fetchDuplicateData();
@@ -163,6 +174,7 @@ function App() {
           sort_by: sortBy,
           sort_order: sortOrder,
           include_missing: includeMissing,
+          folder: currentFolder || undefined,
         },
       });
       setAssets(response.data.items);
@@ -174,6 +186,62 @@ function App() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function fetchFolders(parent: string | null = null) {
+    try {
+      setFolderLoading(true);
+
+      const response = await axios.get<{
+        parent: string | null;
+        folders: { path: string; name: string; source: string }[];
+        total: number;
+      }>(`${API_BASE_URL}/assets/folders`, {
+        params: {
+          parent: parent || undefined,
+          source: "local_pc",
+          include_missing: includeMissing,
+        },
+      });
+
+      setFolders(response.data.folders);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to load folders.");
+    } finally {
+      setFolderLoading(false);
+    }
+  }
+
+  function openFolder(folderPath: string) {
+    setCurrentFolder(folderPath);
+    setPage(1);
+    setSelectedAsset(null);
+  }
+
+  function goToRoot() {
+    setCurrentFolder(null);
+    setPage(1);
+    setSelectedAsset(null);
+  }
+
+  function goToParentFolder() {
+    if (!currentFolder) return;
+
+    const normalized = currentFolder.replace(/[\\/]+$/, "");
+    const lastSeparator = Math.max(
+      normalized.lastIndexOf("\\"),
+      normalized.lastIndexOf("/")
+    );
+
+    if (lastSeparator <= 2) {
+      goToRoot();
+      return;
+    }
+
+    setCurrentFolder(normalized.slice(0, lastSeparator));
+    setPage(1);
+    setSelectedAsset(null);
   }
 
   async function fetchDuplicateData() {
@@ -437,6 +505,12 @@ function App() {
             setSelectedAsset={setSelectedAsset}
             fetchAssets={fetchAssets}
             setPreviewAsset={setPreviewAsset}
+            currentFolder={currentFolder}
+            folders={folders}
+            folderLoading={folderLoading}
+            openFolder={openFolder}
+            goToRoot={goToRoot}
+            goToParentFolder={goToParentFolder}
             analyzeImage={analyzeImage}
             aiAnalyzingId={aiAnalyzingId}
             assetAiAnalyses={assetAiAnalyses}
@@ -554,6 +628,12 @@ function Browser({
   setSelectedAsset,
   fetchAssets,
   setPreviewAsset,
+  currentFolder,
+  folders,
+  folderLoading,
+  openFolder,
+  goToRoot,
+  goToParentFolder,
   analyzeImage,
   aiAnalyzingId,
   assetAiAnalyses,
@@ -571,6 +651,149 @@ function Browser({
         <button className="secondary-button" onClick={fetchAssets}>
           <RefreshCw size={17} /> Refresh
         </button>
+      </section>
+
+      <section className="folder-navigator">
+        <div className="folder-toolbar">
+          <div className="folder-navigation-actions">
+            <button
+              className="secondary-button compact"
+              onClick={goToParentFolder}
+              disabled={!currentFolder}
+              title={currentFolder ? "Go to parent folder" : "Already at Local PC root"}
+            >
+              <ChevronLeft size={15} />
+              Up
+            </button>
+
+            <button
+              className="secondary-button compact"
+              onClick={goToRoot}
+              title="Show all indexed folders"
+            >
+              <HardDrive size={15} />
+              Home
+            </button>
+          </div>
+
+          <div className="folder-location">
+            <div className="folder-location-title">
+              <Folder size={16} />
+              <strong>{currentFolder ? "Current Folder" : "Local PC"}</strong>
+            </div>
+            <div className="folder-location-path" title={currentFolder || "Local PC"}>
+              {currentFolder || "All indexed local folders"}
+            </div>
+          </div>
+
+          <div className="folder-breadcrumbs" aria-label="Folder breadcrumbs">
+            <button
+              className="breadcrumb-button"
+              onClick={goToRoot}
+            >
+              Local PC
+            </button>
+
+            {currentFolder &&
+              (() => {
+                const normalized = currentFolder.replace(/[\\/]+$/, "");
+                const separator = normalized.includes("\\") ? "\\" : "/";
+                const driveMatch = normalized.match(/^([A-Za-z]:)(?:[\\/]|$)/);
+                const drive = driveMatch?.[1];
+                const remainder = drive
+                  ? normalized.slice(2).replace(/^[\\/]+/, "")
+                  : normalized;
+                const parts = remainder.split(/[\\/]+/).filter(Boolean);
+                const breadcrumbs: { label: string; path: string }[] = [];
+
+                if (drive) {
+                  breadcrumbs.push({ label: drive, path: `${drive}\\` });
+                }
+
+                parts.forEach((part: string) => {
+                  const previous = breadcrumbs[breadcrumbs.length - 1]?.path || "";
+                  const base = previous.endsWith("\\") || previous.endsWith("/")
+                    ? previous
+                    : previous
+                      ? `${previous}${separator}`
+                      : "";
+                  breadcrumbs.push({
+                    label: part,
+                    path: `${base}${part}`,
+                  });
+                });
+
+                return breadcrumbs.map((crumb, index) => (
+                  <span className="breadcrumb-item" key={`${crumb.path}-${index}`}>
+                    <span className="breadcrumb-separator">›</span>
+                    <button
+                      className={`breadcrumb-button ${
+                        index === breadcrumbs.length - 1 ? "current" : ""
+                      }`}
+                      onClick={() => openFolder(crumb.path)}
+                      title={crumb.path}
+                    >
+                      {crumb.label}
+                    </button>
+                  </span>
+                ));
+              })()}
+          </div>
+        </div>
+
+        <div className="folder-section-heading">
+          <div>
+            <h3>Folders</h3>
+            <p>
+              {folders.length
+                ? `${folders.length} indexed subfolder${folders.length === 1 ? "" : "s"}`
+                : "Folders available from the current location"}
+            </p>
+          </div>
+          {currentFolder && (
+            <span className="folder-scope-badge" title={currentFolder}>
+              Scoped to current folder
+            </span>
+          )}
+        </div>
+
+        <div className="folder-list">
+          {folderLoading ? (
+            <div className="folder-empty">
+              <RefreshCw size={17} className="spin" />
+              <span>Loading folders...</span>
+            </div>
+          ) : folders.length === 0 ? (
+            <div className="folder-empty">
+              <Folder size={22} />
+              <span>No indexed subfolders</span>
+              <small>
+                {currentFolder
+                  ? "This folder has no indexed child folders."
+                  : "Scan a local folder to discover folders here."}
+              </small>
+            </div>
+          ) : (
+            folders.map((folder: { path: string; name: string; source: string }) => (
+              <button
+                key={folder.path}
+                type="button"
+                className="folder-card"
+                onClick={() => openFolder(folder.path)}
+                title={`Open ${folder.path}`}
+              >
+                <span className="folder-card-icon">
+                  <Folder size={25} />
+                </span>
+                <span className="folder-card-content">
+                  <strong>{folder.name}</strong>
+                  <small>{folder.path}</small>
+                </span>
+                <ChevronRight size={17} className="folder-card-arrow" />
+              </button>
+            ))
+          )}
+        </div>
       </section>
 
       <section className="toolbar">
@@ -649,7 +872,10 @@ function Browser({
       </section>
 
       <div className="results-info">
-        <span>{total.toLocaleString()} assets</span>
+        <span>
+          {total.toLocaleString()} assets
+          {currentFolder ? ` in ${currentFolder}` : " across Local PC"}
+        </span>
         {loading && <span>Loading...</span>}
       </div>
 
