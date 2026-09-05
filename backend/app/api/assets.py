@@ -8,10 +8,46 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.asset import Asset
 
+
 router = APIRouter(
     prefix="/api/assets",
     tags=["Assets"],
 )
+
+
+def serialize_asset(asset: Asset) -> dict:
+    return {
+        "id": asset.id,
+        "source": asset.source,
+        "name": asset.name,
+        "path": asset.path,
+        "extension": asset.extension,
+        "mime_type": asset.mime_type,
+        "file_type": asset.file_type,
+        "size_bytes": asset.size_bytes,
+        "created_at": (
+            asset.created_at.isoformat()
+            if asset.created_at
+            else None
+        ),
+        "modified_at": (
+            asset.modified_at.isoformat()
+            if asset.modified_at
+            else None
+        ),
+        "accessed_at": (
+            asset.accessed_at.isoformat()
+            if asset.accessed_at
+            else None
+        ),
+        "is_missing": asset.is_missing,
+        "last_scanned_at": (
+            asset.last_scanned_at.isoformat()
+            if asset.last_scanned_at
+            else None
+        ),
+    }
+
 
 @router.get("")
 def list_assets(
@@ -22,13 +58,43 @@ def list_assets(
     sort_by: str = Query("modified_at"),
     sort_order: str = Query("desc"),
     include_missing: bool = Query(False),
+    folder: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
     query = select(Asset)
 
     # Exclude missing files by default.
     if not include_missing:
-        query = query.where(Asset.is_missing.is_(False))
+        query = query.where(
+            Asset.is_missing.is_(False)
+        )
+
+    # Restrict results to a selected folder and its descendants.
+    if folder:
+        normalized_folder = str(
+            Path(folder).resolve()
+        ).rstrip("\\/")
+
+        # PostgreSQL LIKE pattern.
+        # Escape % and _ so folder names are treated literally.
+        escaped_folder = (
+            normalized_folder
+            .replace("\\", "\\\\")
+            .replace("%", "\\%")
+            .replace("_", "\\_")
+        )
+
+        folder_pattern = f"{escaped_folder}\\%"
+
+        query = query.where(
+            or_(
+                Asset.path == normalized_folder,
+                Asset.path.ilike(
+                    folder_pattern,
+                    escape="\\",
+                ),
+            )
+        )
 
     # Search by file name or path.
     if search:
@@ -63,9 +129,13 @@ def list_assets(
     )
 
     if sort_order.lower() == "asc":
-        query = query.order_by(asc(sort_column))
+        query = query.order_by(
+            asc(sort_column)
+        )
     else:
-        query = query.order_by(desc(sort_column))
+        query = query.order_by(
+            desc(sort_column)
+        )
 
     # Total matching assets before pagination.
     count_query = select(
@@ -93,48 +163,150 @@ def list_assets(
             if total
             else 0
         ),
+        "folder": normalized_folder if folder else None,
         "items": [
-            {
-                "id": asset.id,
-                "source": asset.source,
-                "name": asset.name,
-                "path": asset.path,
-                "extension": asset.extension,
-                "mime_type": asset.mime_type,
-                "file_type": asset.file_type,
-                "size_bytes": asset.size_bytes,
-                "created_at": (
-                    asset.created_at.isoformat()
-                    if asset.created_at
-                    else None
-                ),
-                "modified_at": (
-                    asset.modified_at.isoformat()
-                    if asset.modified_at
-                    else None
-                ),
-                "accessed_at": (
-                    asset.accessed_at.isoformat()
-                    if asset.accessed_at
-                    else None
-                ),
-                "is_missing": asset.is_missing,
-                "last_scanned_at": (
-                    asset.last_scanned_at.isoformat()
-                    if asset.last_scanned_at
-                    else None
-                ),
-            }
+            serialize_asset(asset)
             for asset in assets
         ],
     }
+
+
+@router.get("/folders")
+def list_folders(
+    parent: str | None = Query(None),
+    source: str | None = Query(None),
+    include_missing: bool = Query(False),
+    db: Session = Depends(get_db),
+):
+    """
+    Return indexed folders directly below the requested parent.
+
+    This endpoint uses indexed asset paths rather than scanning the
+    filesystem directly. That keeps folder navigation consistent with
+    the DAM index.
+    """
+
+    query = select(
+        Asset.path,
+        Asset.source,
+    )
+
+    if not include_missing:
+        query = query.where(
+            Asset.is_missing.is_(False)
+        )
+
+    if source:
+        query = query.where(
+            Asset.source == source
+        )
+
+    rows = db.execute(query).all()
+
+    normalized_parent = None
+
+    if parent:
+        normalized_parent = str(
+            Path(parent).resolve()
+        ).rstrip("\\/")
+
+    folders: dict[str, dict] = {}
+
+    for asset_path, asset_source in rows:
+        if not asset_path:
+            continue
+
+        path = Path(asset_path)
+
+        try:
+            asset_parent = str(
+                path.parent.resolve()
+            ).rstrip("\\/")
+        except OSError:
+            asset_parent = str(
+                path.parent
+            ).rstrip("\\/")
+
+        # If a parent folder is selected, only inspect files
+        # immediately inside that folder or its descendants.
+        if normalized_parent:
+            parent_lower = normalized_parent.lower()
+            asset_path_lower = str(path).lower()
+
+            if not (
+                asset_path_lower == parent_lower
+                or asset_path_lower.startswith(
+                    parent_lower + "\\"
+                )
+            ):
+                continue
+
+            try:
+                relative = path.relative_to(
+                    Path(normalized_parent)
+                )
+            except ValueError:
+                continue
+
+            parts = relative.parts
+
+            # We only want the immediate child folder.
+            if len(parts) < 2:
+                continue
+
+            folder_path = str(
+                Path(normalized_parent) / parts[0]
+            )
+        else:
+            # No parent means show top-level directories.
+            parts = path.parts
+
+            if len(parts) < 2:
+                continue
+
+            # On Windows this preserves the drive root.
+            if len(parts) >= 2 and parts[0].endswith(":"):
+                folder_path = str(
+                    Path(parts[0] + "\\") / parts[1]
+                )
+            else:
+                folder_path = str(
+                    Path(parts[0]) / parts[1]
+                )
+
+        folder_path = folder_path.rstrip("\\/")
+
+        key = folder_path.lower()
+
+        if key not in folders:
+            folders[key] = {
+                "path": folder_path,
+                "name": Path(folder_path).name
+                or folder_path,
+                "source": asset_source,
+            }
+
+    result = sorted(
+        folders.values(),
+        key=lambda item: item["path"].lower(),
+    )
+
+    return {
+        "parent": normalized_parent,
+        "folders": result,
+        "total": len(result),
+    }
+
 
 @router.get("/{asset_id}/preview")
 def preview_asset(
     asset_id: int,
     db: Session = Depends(get_db),
 ):
-    asset = db.get(Asset, asset_id)
+    asset = db.get(
+        Asset,
+        asset_id,
+    )
 
     if asset is None:
         raise HTTPException(
@@ -145,7 +317,10 @@ def preview_asset(
     if asset.source != "local_pc":
         raise HTTPException(
             status_code=400,
-            detail="Preview is currently available only for local PC assets.",
+            detail=(
+                "Preview is currently available "
+                "only for local PC assets."
+            ),
         )
 
     file_path = Path(asset.path)
@@ -153,18 +328,26 @@ def preview_asset(
     if not file_path.exists():
         raise HTTPException(
             status_code=404,
-            detail="The indexed file no longer exists on the filesystem.",
+            detail=(
+                "The indexed file no longer exists "
+                "on the filesystem."
+            ),
         )
 
     if not file_path.is_file():
         raise HTTPException(
             status_code=400,
-            detail="The indexed path is not a file.",
+            detail=(
+                "The indexed path is not a file."
+            ),
         )
 
     return FileResponse(
         path=file_path,
-        media_type=asset.mime_type or "application/octet-stream",
+        media_type=(
+            asset.mime_type
+            or "application/octet-stream"
+        ),
         filename=asset.name,
         content_disposition_type="inline",
     )
