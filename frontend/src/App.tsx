@@ -6,6 +6,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
+  Download,
+  ExternalLink,
   Eye,
   File,
   FileText,
@@ -1557,32 +1559,104 @@ function AIImages({ analyses, query, loading, analyzingId, setQuery, analyze, pr
 }
 
 function Preview({ asset, url, close }: { asset: Asset; url: string; close: () => void }) {
+  const [loadError, setLoadError] = useState(false);
+  const [zoomed, setZoomed] = useState(false);
+
+  useEffect(() => {
+    setLoadError(false);
+    setZoomed(false);
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [asset.id, close]);
+
+  const isImage = asset.mime_type?.startsWith("image/");
+  const isVideo = asset.mime_type?.startsWith("video/");
+  const isPdf = asset.mime_type === "application/pdf";
+
   return (
     <div className="modal-backdrop" onClick={close}>
-      <div className="preview-modal" onClick={(event) => event.stopPropagation()}>
+      <div className="preview-modal preview-modal-enhanced" onClick={(event) => event.stopPropagation()}>
         <div className="preview-header">
-          <div>
-            <h3>{asset.name}</h3>
-            <span>{asset.path}</span>
+          <div className="preview-title-block">
+            <div className="preview-file-icon">{getFileIcon(asset.file_type, 20)}</div>
+            <div>
+              <h3 title={asset.name}>{asset.name}</h3>
+              <span title={asset.path}>{asset.path}</span>
+            </div>
           </div>
-          <button className="icon-button" onClick={close}>
-            <X size={20} />
-          </button>
+          <div className="preview-header-actions">
+            <a
+              className="secondary-button compact"
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              title="Open in a new browser tab"
+            >
+              <ExternalLink size={15} /> Open
+            </a>
+            <a
+              className="secondary-button compact"
+              href={url}
+              download={asset.name}
+              title="Download a copy"
+            >
+              <Download size={15} /> Download
+            </a>
+            <button className="icon-button" onClick={close} title="Close preview" aria-label="Close preview">
+              <X size={20} />
+            </button>
+          </div>
         </div>
-        <div className="preview-content">
-          {asset.mime_type?.startsWith("image/") && <img src={url} alt={asset.name} />}
-          {asset.mime_type?.startsWith("video/") && <video src={url} controls />}
-          {asset.mime_type === "application/pdf" && <iframe src={url} title={asset.name} />}
-          {!asset.mime_type?.startsWith("image/") &&
-            !asset.mime_type?.startsWith("video/") &&
-            asset.mime_type !== "application/pdf" && (
-              <div className="unsupported-preview">
-                <File size={48} />
-                <strong>Preview not available for this file type.</strong>
-                <p>{asset.mime_type || "Unknown MIME type"}</p>
-              </div>
-            )}
+
+        <div className="preview-meta">
+          <span>{asset.file_type}</span>
+          <span>{formatBytes(asset.size_bytes)}</span>
+          <span>{asset.mime_type || "Unknown MIME type"}</span>
         </div>
+
+        <div className="preview-content preview-content-enhanced">
+          {loadError ? (
+            <div className="unsupported-preview">
+              <AlertTriangle size={48} />
+              <strong>Preview could not be loaded.</strong>
+              <p>The indexed file may be unavailable or the browser could not render this format.</p>
+              <a className="primary-button compact" href={url} target="_blank" rel="noreferrer">
+                <ExternalLink size={15} /> Try Open
+              </a>
+            </div>
+          ) : isImage ? (
+            <button
+              type="button"
+              className={`preview-image-button ${zoomed ? "zoomed" : ""}`}
+              onClick={() => setZoomed((current) => !current)}
+              title={zoomed ? "Fit image" : "Zoom image"}
+            >
+              <img src={url} alt={asset.name} onError={() => setLoadError(true)} />
+            </button>
+          ) : isVideo ? (
+            <video src={url} controls preload="metadata" onError={() => setLoadError(true)} />
+          ) : isPdf ? (
+            <iframe src={url} title={asset.name} onError={() => setLoadError(true)} />
+          ) : (
+            <div className="unsupported-preview">
+              <File size={48} />
+              <strong>Preview not available for this file type.</strong>
+              <p>{asset.mime_type || "Unknown MIME type"}</p>
+              <a className="secondary-button compact" href={url} target="_blank" rel="noreferrer">
+                <ExternalLink size={15} /> Open File
+              </a>
+            </div>
+          )}
+        </div>
+
+        {isImage && !loadError && (
+          <div className="preview-hint">Click the image to {zoomed ? "fit it to the preview" : "zoom it"} · Press Esc to close</div>
+        )}
       </div>
     </div>
   );
