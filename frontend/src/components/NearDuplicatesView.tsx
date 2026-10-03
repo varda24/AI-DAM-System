@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { API_BASE_URL } from "../api";
 import { AlertTriangle, CheckCircle2, Eye, Images, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
-import type { Asset, VisualSimilarGroup } from "../types";
-
-const API_BASE_URL = "http://127.0.0.1:8000/api";
+import type { VisualSimilarGroup } from "../types";
 
 interface NearDuplicatesViewProps {
-  onPreviewAsset: (asset: Asset) => void;
+  onPreviewAsset: (assetId: number) => void;
 }
 
 export function NearDuplicatesView({ onPreviewAsset }: NearDuplicatesViewProps) {
@@ -152,23 +151,29 @@ export function NearDuplicatesView({ onPreviewAsset }: NearDuplicatesViewProps) 
                   <div
                     key={asset.id}
                     className="similar-asset-card"
-                    onDoubleClick={() => onPreviewAsset((asset as unknown) as Asset)}
+                    onDoubleClick={() => asset.source === "local_pc" && onPreviewAsset(asset.id)}
                   >
                     <div className="similar-img-wrapper">
-                      <img src={`${API_BASE_URL}/assets/${asset.id}/preview`} alt={asset.name} />
-                      <button
+                      {asset.source === "local_pc" ? (
+                        <img src={`${API_BASE_URL}/assets/${asset.id}/preview`} alt={asset.name} />
+                      ) : (
+                        <a className="drive-similar-link" href={asset.web_view_link || undefined} target="_blank" rel="noreferrer">
+                          Open Drive asset
+                        </a>
+                      )}
+                      {asset.source === "local_pc" && <button
                         className="preview-badge-btn center"
-                        onClick={() => onPreviewAsset((asset as unknown) as Asset)}
+                        onClick={() => onPreviewAsset(asset.id)}
                         title="Preview Image"
                       >
                         <Eye size={14} /> View
-                      </button>
+                      </button>}
                     </div>
 
                     <div className="similar-asset-info">
                       <strong title={asset.name}>{asset.name}</strong>
                       <span className="path" title={asset.path}>
-                        {asset.path}
+                        {asset.source || "local_pc"} · {asset.path}
                       </span>
                       <div className="meta-row">
                         <small>{formatBytes(asset.size_bytes)}</small>

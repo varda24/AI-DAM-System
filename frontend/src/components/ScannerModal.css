@@ -1,0 +1,37 @@
+.scanner-modal { width: min(980px, 96vw); max-height: 94vh; display: flex; flex-direction: column; }
+.folder-selector-form { min-height: 0; overflow: hidden; }
+.scan-search-box { display: flex; align-items: center; gap: 9px; margin: 16px 20px 0; padding: 0 11px; min-height: 40px; border: 1px solid #d8dee9; border-radius: 7px; color: #667085; }
+.scan-search-box input { flex: 1; width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: #172033; }
+.scan-tree-toolbar { display: flex; flex-wrap: wrap; gap: 7px; padding: 0 20px; }
+.scan-folder-tree { min-height: 150px; max-height: min(42vh, 460px); overflow: auto; margin: 0 20px; border: 1px solid #dfe4eb; border-radius: 7px; background: #fff; }
+.scan-folder-row { display: grid; grid-template-columns: 26px 18px 19px minmax(0, 1fr); align-items: center; gap: 7px; min-height: 37px; padding: 3px 10px; padding-left: calc(10px + var(--tree-depth) * 22px); border-bottom: 1px solid #f0f2f5; color: #344054; }
+.scan-folder-row:hover { background: #f7f9fb; }
+.scan-folder-row input[type="checkbox"], .scan-search-result input[type="checkbox"] { width: 16px; height: 16px; accent-color: #315f52; cursor: pointer; }
+.scan-tree-expander { width: 24px; height: 26px; border: 0; border-radius: 4px; display: grid; place-items: center; background: transparent; color: #667085; padding: 0; }
+.scan-tree-expander:hover { background: #e9eef1; }
+.scan-folder-name { display: flex; align-items: baseline; gap: 9px; min-width: 0; border: 0; background: transparent; color: inherit; text-align: left; padding: 3px 0; }
+.scan-folder-name strong { flex: 0 0 auto; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.scan-folder-name small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #7a8495; font-size: 11px; }
+.scan-folder-empty { padding: 8px 12px 8px calc(20px + var(--tree-depth) * 22px); color: #7a8495; font-size: 12px; }
+.scan-tree-message { min-height: 130px; display: flex; align-items: center; justify-content: center; gap: 9px; color: #667085; font-size: 13px; }
+.scan-search-results { display: flex; flex-direction: column; gap: 4px; max-height: 150px; overflow: auto; padding: 0 20px; }
+.scan-search-results > strong { font-size: 12px; color: #475467; }
+.scan-search-results > span, .scan-search-results > small { color: #667085; font-size: 12px; }
+.scan-search-result { display: grid; grid-template-columns: 18px minmax(0, 1fr) 22px; align-items: center; gap: 8px; min-height: 30px; color: #475467; }
+.scan-search-result span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.scan-selection-summary { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0 20px; padding: 12px 0; border-block: 1px solid #e5e9ef; color: #667085; font-size: 12px; }
+.scan-selection-summary strong { color: #172033; }
+.scan-selection-summary small { flex-basis: 100%; color: #7a8495; line-height: 1.45; }
+.folder-selector-form .error-banner { margin: 0 20px; }
+.folder-selector-form .scan-results-card { max-height: 180px; overflow: auto; }
+.folder-selector-form .cleanup-modal-actions { flex: 0 0 auto; padding-top: 10px; }
+@media (max-width: 650px) {
+  .scanner-modal { width: 100vw; max-height: 100dvh; height: 100dvh; border-radius: 0; }
+  .scan-tree-toolbar { gap: 5px; }
+  .scan-tree-toolbar button { font-size: 11px; padding-inline: 8px; }
+  .scan-folder-row { grid-template-columns: 22px 18px 18px minmax(0, 1fr); gap: 5px; padding-left: calc(6px + var(--tree-depth) * 14px); }
+  .scan-folder-name { flex-direction: column; align-items: flex-start; gap: 1px; }
+  .scan-folder-name strong { max-width: 100%; }
+  .scan-folder-name small { max-width: 100%; }
+  .scan-folder-tree { max-height: 38vh; }
+}

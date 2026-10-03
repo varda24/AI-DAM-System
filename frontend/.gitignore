@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+backend/credentials/
+backend/token.json
+backend/google_drive_token.json

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -15,9 +15,10 @@ router = APIRouter(
 
 @router.post("/detect")
 def run_duplicate_detection(
+    hash_local_assets: bool = Query(default=True),
     db: Session = Depends(get_db),
 ):
-    return detect_exact_duplicates(db)
+    return detect_exact_duplicates(db, hash_local_assets=hash_local_assets)
 
 
 @router.get("")
@@ -60,6 +61,15 @@ def list_duplicate_groups(
                 "assets": [
                     {
                         "id": asset.id,
+                        "source": asset.source,
+                        "source_account_id": asset.source_account_id,
+                        "source_folder_id": asset.source_folder_id,
+                        "web_view_link": asset.web_view_link,
+                        "drive_file_id": (
+                            asset.source_file_id
+                            if asset.source == "google_drive"
+                            else None
+                        ),
                         "name": asset.name,
                         "path": asset.path,
                         "size_bytes": asset.size_bytes,

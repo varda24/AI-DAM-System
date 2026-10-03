@@ -31,3 +31,33 @@ thumbnails/
 
 # Database/local runtime
 *.db
+
+backend/credentials/
+backend/token.json
+backend/google_drive_token.json
+
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Google OAuth credentials and tokens
+credentials/
+
+# Local/private fixtures and generated working data
+/test-assets/
+.kilo/
+.pytest_cache/
+
+# Python environments (including suffixed local environments)
+.venv*/
+venv*/
+
+# Local databases and private certificates/keys
+*.sqlite
+*.sqlite3
+*.pem
+*.key
+*.p12
+*.pfx

@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { API_BASE_URL } from "../api";
 import { AlertTriangle, CheckCircle, Edit3, Eye, Loader2, RefreshCw, UserCheck, Users } from "lucide-react";
-import type { Asset, PersonCluster } from "../types";
-
-const API_BASE_URL = "http://127.0.0.1:8000/api";
+import type { PersonCluster } from "../types";
 
 interface PeopleViewProps {
-  onPreviewAsset: (asset: Asset) => void;
+  onPreviewAsset: (assetId: number) => void;
 }
 
 export function PeopleView({ onPreviewAsset }: PeopleViewProps) {
@@ -209,13 +208,13 @@ export function PeopleView({ onPreviewAsset }: PeopleViewProps) {
                     <div
                       key={asset.id}
                       className="cluster-photo-thumb"
-                      onDoubleClick={() => onPreviewAsset(asset as Asset)}
+                      onDoubleClick={() => onPreviewAsset(asset.id)}
                     >
                       <img src={`${API_BASE_URL}/assets/${asset.id}/preview`} alt={asset.name} />
                       <div className="thumb-hover-overlay">
                         <button
                           className="preview-badge-btn"
-                          onClick={() => onPreviewAsset(asset as Asset)}
+                          onClick={() => onPreviewAsset(asset.id)}
                           title="Preview Asset"
                         >
                           <Eye size={14} /> Preview

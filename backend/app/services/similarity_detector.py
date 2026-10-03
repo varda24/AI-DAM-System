@@ -137,6 +137,15 @@ def find_similar_images(
             "assets": [
                 {
                     "id": asset.id,
+                    "source": asset.source,
+                    "source_account_id": asset.source_account_id,
+                    "source_folder_id": asset.source_folder_id,
+                    "drive_file_id": (
+                        asset.source_file_id
+                        if asset.source == "google_drive"
+                        else None
+                    ),
+                    "web_view_link": asset.web_view_link,
                     "name": asset.name,
                     "path": asset.path,
                     "size_bytes": asset.size_bytes,

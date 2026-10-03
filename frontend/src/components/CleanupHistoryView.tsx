@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { API_BASE_URL } from "../api";
 import { AlertTriangle, CheckCircle2, History, Info, Loader2, RefreshCw, RotateCcw, X } from "lucide-react";
 import type { CleanupOperationDetail, CleanupOperationRecord } from "../types";
-
-const API_BASE_URL = "http://127.0.0.1:8000/api";
 
 export function CleanupHistoryView() {
   const [operations, setOperations] = useState<CleanupOperationRecord[]>([]);

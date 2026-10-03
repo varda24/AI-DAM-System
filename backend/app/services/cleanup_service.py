@@ -26,6 +26,7 @@ def preview_cleanup(
     assets = db.scalars(
         select(Asset).where(
             Asset.id.in_(asset_ids),
+            Asset.source == "local_pc",
             Asset.is_missing.is_(False),
         )
     ).all()
@@ -68,6 +69,7 @@ def execute_cleanup(
     assets = db.scalars(
         select(Asset).where(
             Asset.id.in_(asset_ids),
+            Asset.source == "local_pc",
             Asset.is_missing.is_(False),
         )
     ).all()

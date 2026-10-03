@@ -9,7 +9,10 @@ from app.models.duplicate import DuplicateGroup, DuplicateMember
 from app.services.hashing import calculate_sha256
 
 
-def detect_exact_duplicates(db: Session) -> dict:
+def detect_exact_duplicates(
+    db: Session,
+    hash_local_assets: bool = True,
+) -> dict:
     assets = db.scalars(
         select(Asset).where(
             Asset.source == "local_pc",
@@ -20,7 +23,7 @@ def detect_exact_duplicates(db: Session) -> dict:
     hashed_count = 0
     hash_errors = []
 
-    for asset in assets:
+    for asset in assets if hash_local_assets else []:
         file_path = Path(asset.path)
 
         if not file_path.exists() or not file_path.is_file():

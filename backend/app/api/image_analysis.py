@@ -2,11 +2,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.asset import Asset
+from app.models.analysis_job import AnalysisJob
 from app.models.image_analysis import ImageAnalysis
 from app.services.image_batch_analyzer import analyze_all_images
 from app.services.image_analyzer import get_image_analyzer
@@ -76,31 +77,52 @@ def analyze_all(db: Session = Depends(get_db)):
 
 @router.get("/search")
 def search_analyzed_images(
-    q: str,
+    q: str | None = None,
     db: Session = Depends(get_db),
 ):
-    pattern = f"%{q}%"
+    latest_image_job_id = (
+        select(func.max(AnalysisJob.id))
+        .where(
+            AnalysisJob.asset_id == Asset.id,
+            AnalysisJob.job_type == "IMAGE_ANALYSIS",
+        )
+        .correlate(Asset)
+        .scalar_subquery()
+    )
+    query = (
+        select(Asset, ImageAnalysis, AnalysisJob)
+        .outerjoin(ImageAnalysis, ImageAnalysis.asset_id == Asset.id)
+        .outerjoin(AnalysisJob, AnalysisJob.id == latest_image_job_id)
+        .where(
+            Asset.source == "local_pc",
+            Asset.file_type == "image",
+            Asset.is_missing.is_(False),
+        )
+    )
+
+    search_term = q.strip() if q else ""
+    if search_term:
+        pattern = f"%{search_term}%"
+        query = query.where(
+            ImageAnalysis.id.is_not(None),
+            ImageAnalysis.caption.ilike(pattern)
+            | ImageAnalysis.category.ilike(pattern)
+            | ImageAnalysis.tags.ilike(pattern),
+        )
 
     rows = db.execute(
-        select(ImageAnalysis, Asset)
-        .join(
-            Asset,
-            Asset.id == ImageAnalysis.asset_id,
-        )
-        .where(
-            Asset.is_missing.is_(False),
-            (
-                ImageAnalysis.caption.ilike(pattern)
-                | ImageAnalysis.category.ilike(pattern)
-                | ImageAnalysis.tags.ilike(pattern)
-            ),
-        )
-        .order_by(ImageAnalysis.analyzed_at.desc())
-        .limit(100)
+        query.order_by(
+            func.coalesce(
+                AnalysisJob.created_at,
+                ImageAnalysis.analyzed_at,
+                Asset.modified_at,
+            ).desc().nullslast(),
+            Asset.id.desc(),
+        ).limit(100)
     ).all()
 
     return {
-        "query": q,
+        "query": search_term,
         "total": len(rows),
         "items": [
             {
@@ -109,16 +131,20 @@ def search_analyzed_images(
                 "path": asset.path,
                 "size_bytes": asset.size_bytes,
                 "mime_type": asset.mime_type,
-                "caption": analysis.caption,
-                "category": analysis.category,
-                "tags": analysis.tags.split(",") if analysis.tags else [],
+                "caption": analysis.caption if analysis else None,
+                "category": analysis.category if analysis else None,
+                "tags": analysis.tags.split(",") if analysis and analysis.tags else [],
                 "analyzed_at": (
                     analysis.analyzed_at.isoformat()
-                    if analysis.analyzed_at
+                    if analysis and analysis.analyzed_at
                     else None
                 ),
+                "analysis_status": (
+                    job.status if job else "ANALYZED" if analysis else "NOT_QUEUED"
+                ),
+                "analysis_error": job.error_message if job else None,
             }
-            for analysis, asset in rows
+            for asset, analysis, job in rows
         ],
     }
 

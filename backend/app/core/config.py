@@ -7,6 +7,12 @@ class Settings(BaseSettings):
 	CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
 	ENVIRONMENT: str = "development"
 	LOG_LEVEL: str = "INFO"
+	GOOGLE_CLIENT_SECRET_FILE: str = "credentials/google_client_secret.json"
+	GOOGLE_REDIRECT_URI: str = (
+    	"http://127.0.0.1:8000/api/google-drive/oauth/callback"
+	)
+	GOOGLE_DRIVE_TOKEN_FILE: str = "credentials/google_drive_token.json"
+	TESSERACT_CMD: str | None = None
 
 	model_config = SettingsConfigDict(
 		env_file=".env",

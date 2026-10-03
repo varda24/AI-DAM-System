@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Index, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, Index, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -12,7 +12,10 @@ class Asset(Base):
 
     # Source identification
     source: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    source_account_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_file_id: Mapped[str] = mapped_column(Text, nullable=False)
+    source_folder_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    web_view_link: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # File information
     name: Mapped[str] = mapped_column(Text, nullable=False)
@@ -49,10 +52,26 @@ class Asset(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint(
+        CheckConstraint(
+            "source <> 'google_drive' OR source_account_id IS NOT NULL",
+            name="ck_drive_assets_require_account",
+        ),
+        Index(
+            "uq_assets_non_drive_source_file",
             "source",
             "source_file_id",
-            name="uq_asset_source_file",
+            unique=True,
+            postgresql_where=text("source <> 'google_drive'"),
+            sqlite_where=text("source <> 'google_drive'"),
+        ),
+        Index(
+            "uq_assets_drive_account_file",
+            "source",
+            "source_account_id",
+            "source_file_id",
+            unique=True,
+            postgresql_where=text("source = 'google_drive'"),
+            sqlite_where=text("source = 'google_drive'"),
         ),
         Index(
             "ix_assets_source_path",

@@ -2,7 +2,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
-from sqlalchemy import asc, desc, func, or_, select
+from sqlalchemy import asc, case, desc, func, literal, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -16,9 +16,12 @@ router = APIRouter(
 
 
 def serialize_asset(asset: Asset) -> dict:
-    return {
+    result = {
         "id": asset.id,
         "source": asset.source,
+        "source_account_id": asset.source_account_id,
+        "source_folder_id": asset.source_folder_id,
+        "web_view_link": asset.web_view_link,
         "name": asset.name,
         "path": asset.path,
         "extension": asset.extension,
@@ -41,12 +44,19 @@ def serialize_asset(asset: Asset) -> dict:
             else None
         ),
         "is_missing": asset.is_missing,
+        "sha256": asset.sha256,
+        "perceptual_hash": asset.perceptual_hash,
         "last_scanned_at": (
             asset.last_scanned_at.isoformat()
             if asset.last_scanned_at
             else None
         ),
     }
+    if asset.source == "google_drive":
+        result.update({
+            "drive_file_id": asset.source_file_id,
+        })
+    return result
 
 
 @router.get("")
@@ -55,6 +65,7 @@ def list_assets(
     page_size: int = Query(50, ge=1, le=200),
     search: str | None = Query(None),
     file_type: str | None = Query(None),
+    source: str | None = Query(None),
     sort_by: str = Query("modified_at"),
     sort_order: str = Query("desc"),
     include_missing: bool = Query(False),
@@ -68,6 +79,9 @@ def list_assets(
         query = query.where(
             Asset.is_missing.is_(False)
         )
+
+    if source:
+        query = query.where(Asset.source == source)
 
     # Restrict results to a selected folder and its descendants.
     if folder:
@@ -84,7 +98,7 @@ def list_assets(
             .replace("_", "\\_")
         )
 
-        folder_pattern = f"{escaped_folder}\\%"
+        folder_pattern = f"{escaped_folder}\\\\%"
 
         query = query.where(
             or_(
@@ -201,14 +215,82 @@ def list_folders(
             Asset.source == source
         )
 
-    rows = db.execute(query).all()
-
     normalized_parent = None
 
     if parent:
         normalized_parent = str(
             Path(parent).resolve()
         ).rstrip("\\/")
+
+    if db.get_bind().dialect.name == "postgresql":
+        normalized_path = func.replace(Asset.path, "\\", "/")
+
+        if normalized_parent:
+            parent_for_query = normalized_parent.replace("\\", "/").rstrip("/")
+            remainder = func.substr(
+                normalized_path,
+                len(parent_for_query) + 2,
+            )
+            child_name = func.split_part(remainder, "/", 1)
+            separator = "\\" if "\\" in normalized_parent else "/"
+            folder_path = normalized_parent + separator + child_name
+
+            folder_query = query.with_only_columns(
+                folder_path.label("path"),
+                Asset.source,
+            ).where(
+                func.left(
+                    func.lower(normalized_path),
+                    len(parent_for_query) + 1,
+                )
+                == (parent_for_query + "/").lower(),
+                func.strpos(remainder, "/") > 0,
+                child_name != "",
+            ).distinct()
+        else:
+            first_part = func.split_part(normalized_path, "/", 1)
+            second_part = func.split_part(normalized_path, "/", 2)
+            folder_path = case(
+                (
+                    first_part.op("~")(r"^[A-Za-z]:$"),
+                    first_part + literal("\\") + second_part,
+                ),
+                (
+                    func.left(normalized_path, 1) == "/",
+                    literal("/") + second_part,
+                ),
+                else_=first_part + literal("/") + second_part,
+            )
+
+            folder_query = query.with_only_columns(
+                folder_path.label("path"),
+                Asset.source,
+            ).where(second_part != "").distinct()
+
+        folders = {}
+        for folder_path, asset_source in db.execute(folder_query).all():
+            key = folder_path.lower()
+            folders.setdefault(
+                key,
+                {
+                    "path": folder_path,
+                    "name": Path(folder_path).name or folder_path,
+                    "source": asset_source,
+                },
+            )
+
+        result = sorted(
+            folders.values(),
+            key=lambda item: item["path"].lower(),
+        )
+
+        return {
+            "parent": normalized_parent,
+            "folders": result,
+            "total": len(result),
+        }
+
+    rows = db.execute(query).all()
 
     folders: dict[str, dict] = {}
 
@@ -296,6 +378,22 @@ def list_folders(
         "folders": result,
         "total": len(result),
     }
+
+
+@router.get("/{asset_id}")
+def get_asset(
+    asset_id: int,
+    db: Session = Depends(get_db),
+):
+    asset = db.get(Asset, asset_id)
+
+    if asset is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Asset not found.",
+        )
+
+    return serialize_asset(asset)
 
 
 @router.get("/{asset_id}/preview")

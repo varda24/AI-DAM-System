@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { API_BASE_URL } from "../api";
 import { AlertTriangle, Check, CheckCircle2, Eye, FolderHeart, Sparkles, Tag } from "lucide-react";
-import type { ApprovedCollection, Asset, CollectionSuggestion } from "../types";
-
-const API_BASE_URL = "http://127.0.0.1:8000/api";
+import type { ApprovedCollection, CollectionSuggestion } from "../types";
 
 interface CollectionsViewProps {
-  onPreviewAsset: (asset: Asset) => void;
+  onPreviewAsset: (assetId: number) => void;
 }
 
 export function CollectionsView({ onPreviewAsset }: CollectionsViewProps) {
@@ -138,28 +137,12 @@ export function CollectionsView({ onPreviewAsset }: CollectionsViewProps) {
                       <div
                         key={id}
                         className="strip-photo"
-                        onDoubleClick={() =>
-                          onPreviewAsset({
-                            id,
-                            name: `Asset ${id}`,
-                            path: "",
-                            file_type: "image",
-                            mime_type: "image/*",
-                          } as Asset)
-                        }
+                        onDoubleClick={() => onPreviewAsset(id)}
                       >
                         <img src={`${API_BASE_URL}/assets/${id}/preview`} alt={`Asset ${id}`} />
                         <button
                           className="strip-preview-overlay"
-                          onClick={() =>
-                            onPreviewAsset({
-                              id,
-                              name: `Asset ${id}`,
-                              path: "",
-                              file_type: "image",
-                              mime_type: "image/*",
-                            } as Asset)
-                          }
+                          onClick={() => onPreviewAsset(id)}
                           title="Preview Asset"
                         >
                           <Eye size={14} />
