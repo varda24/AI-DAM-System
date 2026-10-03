@@ -30,6 +30,8 @@ DOCUMENT_NAME_HINTS = (
 
 _worker_lock = threading.Lock()
 _worker_running = False
+_work_available = threading.Event()
+_worker_stop = threading.Event()
 
 
 def asset_signature(asset: Asset) -> str:
@@ -193,15 +195,22 @@ def drain_pending_jobs(batch_size: int = 100) -> int:
 
 def start_analysis_worker(limit: int = 100) -> None:
     global _worker_running
+    _work_available.set()
     with _worker_lock:
         if _worker_running:
             return
+        _worker_stop.clear()
         _worker_running = True
 
     def run() -> None:
         global _worker_running
         try:
-            drain_pending_jobs(batch_size=limit)
+            while not _worker_stop.is_set():
+                _work_available.clear()
+                drain_pending_jobs(batch_size=limit)
+                if _worker_stop.is_set():
+                    break
+                _work_available.wait()
         finally:
             with _worker_lock:
                 _worker_running = False
